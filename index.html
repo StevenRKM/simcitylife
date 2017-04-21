@@ -1,0 +1,488 @@
+<html>
+
+<head lang="en">
+    <meta charset="utf-8">
+    <title>SimCityLife</title>
+
+    <script src="jquery-1.9.1.min.js"></script>
+    <!--<script src="http://code.jquery.com/jquery-1.9.1.min.js"></script>-->
+</head>
+
+
+<body onload="" style="background-color: #3693d1; margin: 0; padding:  0">
+<canvas id="canvas" width="1920" height="700" style="background-color: darkgreen; position: absolute; bottom: 0px"></canvas>
+</body>
+
+<script>
+    var canvas = $('#canvas')[0];
+    var context = $('#canvas')[0].getContext("2d");
+    context.fillStyle = "orange";
+    context.strokeStyle = "#000000";
+    context.font = "24px sans-serif";
+
+    canvas.addEventListener("mousedown", function(event) {onMouseDown(event.offsetX, event.offsetY);}, false);
+    canvas.addEventListener("mouseup", function(event) {onMouseUp(event.offsetX, event.offsetY);}, false);
+    canvas.addEventListener("mousemove", function(event) {onMouseMove(event.offsetX, event.offsetY);}, false);
+
+    var color_blue = "#3693d1";
+
+    var TYPE_GROUND = 0;
+    var TYPE_STREET = 1;
+    var TYPE_BUILDING = 2;
+    var TYPE_DUMMY = 3;
+    var TYPE_CLOUD = 4;
+
+    var BORDER = 'BORDER';
+    var STREET_VERTICAL = 'STREET_VERTICAL';
+    var STREET_HORIZONTAL = 'STREET_HORIZONTAL';
+    var STREET_CROSSROADS = 'STREET_CROSSROADS';
+    var STREET_CROSSROADS_NORTH = 'STREET_CROSSROADS_NORTH';
+    var STREET_CROSSROADS_SOUTH = 'STREET_CROSSROADS_SOUTH';
+    var STREET_CROSSROADS_WEST = 'STREET_CROSSROADS_WEST';
+    var STREET_CROSSROADS_EAST = 'STREET_CROSSROADS_EAST';
+    var STREET_CORNER_SE = 'STREET_CORNER_SE';
+    var STREET_CORNER_NE = 'STREET_CORNER_NE';
+    var STREET_CORNER_SW = 'STREET_CORNER_SW';
+    var STREET_CORNER_NW = 'STREET_CORNER_NW';
+    var BUILDING_RED_TOP = 'BUILDING_RED_TOP';
+    var BUILDING_RED_MIDDLE = 'BUILDING_RED_MIDDLE';
+    var BUILDING_RED_BOTTOM = 'BUILDING_RED_BOTTOM';
+    var BUILDING_GREEN_TOP = 'BUILDING_GREEN_TOP';
+    var BUILDING_GREEN_BOTTOM = 'BUILDING_GREEN_BOTTOM';
+    var GROUND_GRASS = 'GROUND_GRASS';
+    var SKYLANE_CLOUD = 'SKYLANE_CLOUD';
+
+    var tileset;
+    var tileset_mapping = {
+        STREET_HORIZONTAL: {'i':0, 'j':0},
+        STREET_VERTICAL: {'i':0, 'j':1},
+        STREET_CROSSROADS: {'i':0, 'j':2},
+        STREET_CROSSROADS_NORTH: {'i':0, 'j':3},
+        STREET_CROSSROADS_SOUTH: {'i':0, 'j':4},
+        STREET_CROSSROADS_WEST: {'i':0, 'j':5},
+        STREET_CROSSROADS_EAST: {'i':0, 'j':6},
+        STREET_CORNER_SE: {'i':0, 'j':8},
+        STREET_CORNER_NE: {'i':0, 'j':9},
+        STREET_CORNER_SW: {'i':1, 'j':8},
+        STREET_CORNER_NW: {'i':1, 'j':9},
+        BUILDING_RED_TOP: {'i':1, 'j':0},
+        BUILDING_RED_MIDDLE: {'i':1, 'j':1},
+        BUILDING_RED_BOTTOM: {'i':1, 'j':2},
+        BUILDING_GREEN_TOP: {'i':1, 'j':3},
+        BUILDING_GREEN_BOTTOM: {'i':1, 'j':4},
+        GROUND_GRASS: {'i':0, 'j': 7},
+        SKYLANE_CLOUD: {'i':1, 'j': 5},
+    }
+
+    var grid_cols = 101;
+    var grid_rows = 20;
+
+    var tile_width = 32;
+    var tile_height = 16;
+    var tile_width_base = 16;
+    var tile_offset = 16;
+
+    var origin_x = 0
+    var origin_y = canvas.height;
+    var origin_a_x = origin_x - grid_rows * tile_height;
+    var origin_a_y = grid_cols * tile_width;
+
+    var center_i = grid_cols / 2;
+    var center_j = grid_rows / 2;
+
+    context.fillRect(0,0,canvas.width,canvas.height - grid_rows*tile_height);
+    var grid = Array(grid_cols);
+    for (var i = 0; i < grid_cols; i++) {
+        grid[i] = new Array(grid_rows);
+
+        for (var j = 0; j < grid_rows; j++) {
+//            else if(j%3==2)
+//                grid[i][j] = sceneStreet(STREET_VERTICAL);
+                //grid[i][j] = sceneBuilding(Math.floor((Math.random()*3)+1) );
+            if(j%5==0 || i%5 == 0)
+                grid[i][j] = sceneStreet();
+            else {
+
+                manhattan = Math.ceil( Math.abs(i - center_i) + Math.abs(j - center_j) );
+
+                if( Math.floor(random(manhattan)/12) )
+                    grid[i][j] = sceneTile(TYPE_GROUND, GROUND_GRASS);
+                else {
+                    manhattan = Math.pow(manhattan, 2);
+                    console.log(manhattan);
+                    grid[i][j] = sceneBuilding( 10 - ( 10  * ( random(manhattan) /200)  ) );
+
+                }
+            }
+        }
+    }
+
+    var skylanes = Array(grid_rows);
+    for (var i = 0; i < grid_rows; i++) {
+        skylanes[i] = new Array();
+
+        if(!random(2)) {
+            skylanes[i].push(sceneCloud());
+        }
+    }
+
+    // load images
+    tileset = new Image()
+    //tileset.src = "http://dl.dropbox.com/u/634220/simcitylive/tilemap.png";
+    tileset.src = "data:image/png;base64,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";
+
+    function init() {
+//        var map =
+//                "|" +
+//                        "             x |" +
+//                        "             x |" +
+//                        "xxxxxxxxxxxxxxxxxx|" +
+//                        "     x       x |" +
+//                        "     x       x   xxxxxxxxx|" +
+//                        "     x       x   x       x|" +
+//                        "     xxxxxxxxxxxxx       x|" +
+//                        "                         xxxxxxxxxx|" +
+//                        "                         x      x|" +
+//                        "                         x      x|" +
+//                        "                         x      x|" +
+//                        "                         x      xxxxxxxxxxx|" +
+//                        "                         x      x|" +
+//                        "";
+//
+//        console.log("init");
+//
+//        rows = map.split("|");
+//        for(r in rows) {
+//            for(c in rows[r]) {
+//                if(rows[r][c] == "x") {
+//                    grid[c][grid_rows - r-1] = sceneStreet();
+//                }
+//
+//            }
+//
+//        }
+
+        var lastTime = 0;
+        var vendors = ['ms', 'moz', 'webkit', 'o'];
+        for(var x = 0; x < vendors.length && !window.requestAnimationFrame; ++x) {
+            window.requestAnimationFrame = window[vendors[x]+'RequestAnimationFrame'];
+            window.cancelAnimationFrame = window[vendors[x]+'CancelAnimationFrame']
+                    || window[vendors[x]+'CancelRequestAnimationFrame'];
+        }
+
+        if (!window.requestAnimationFrame)
+            window.requestAnimationFrame = function(callback, element) {
+                var currTime = new Date().getTime();
+                var timeToCall = Math.max(0, 16 - (currTime - lastTime));
+                var id = window.setTimeout(function() { callback(currTime + timeToCall); },
+                        timeToCall);
+                lastTime = currTime + timeToCall;
+                return id;
+            };
+
+        if (!window.cancelAnimationFrame)
+            window.cancelAnimationFrame = function(id) {
+                clearTimeout(id);
+            };
+
+        loop()
+
+        // first draw
+//        redraw();
+    }
+
+    tileset.onload = init;
+
+    // draw loop
+
+    var mouseX = 0,
+            mouseY = 0,
+            lastMouseX = 0,
+            lastMouseY = 0,
+            frameRate = 60,
+            lastUpdate = Date.now(),
+            mouseDown = false;
+
+    function loop() {
+
+        var now = Date.now();
+        var elapsedMils = now - lastUpdate;
+
+
+        if( elapsedMils>=(1000/window.frameRate) ) {
+//            window.draw();
+
+            lastUpdate = now;
+            lastMouseX = mouseX;
+            lastMouseY = mouseY;
+
+            redraw();
+        }
+
+        requestAnimationFrame(loop);
+
+    };
+
+    function redraw() {
+
+        clear();
+
+//        console.log("redraw");
+
+        color = context.fillStyle;
+        context.fillStyle = color_blue;
+        context.fillRect(0,0,canvas.width,canvas.height - grid_rows*tile_height);
+        context.fillStyle = color;
+
+//        context.drawImage(tileset, 0, 0, tileset.width, tileset.height, canvas.width-tileset.width*4, 0, tileset.width*4, tileset.height*4);
+
+        // draw grid
+        for (var j = grid_rows-1; j >=0; j--) {
+            for (var i = 0; i < grid_cols; i++) {
+                grid[i][j].render(i, j, grid[i][j]);
+
+                coords = grid_to_coords(i, j);
+//                drawText({'x':coords.x*4+500, 'y':coords.y}, i+" , "+j);
+            }
+
+            for(s in skylanes[j]) {
+                skylanes[j][s].render(j, skylanes[j][s]);
+            }
+        }
+
+        // loop
+//        setTimeout(redraw, 100) //wait ten seconds before continuing
+
+    }
+
+    function clear() {
+        context.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    // draw shapes
+
+    function drawCircle(pos) {
+        context.beginPath();
+        context.arc(pos.x, pos.y, 10, 0, Math.PI*2, true);
+        context.closePath();
+        context.fill();
+    }
+
+    function drawImage(pos, image) {
+        coords = tileset_mapping[image];
+
+//        if(coords == undefined)
+//            console.log(image);
+
+        context.drawImage(tileset, tile_width*coords.i, tile_height*coords.j, tile_width, tile_height, pos.x, pos.y, tile_width, tile_height);
+    }
+
+    function drawText(pos, text) {
+        context.fillText(text, pos.x, pos.y);
+    }
+
+    // shapes
+
+    function sPoint(x, y) { return {"x":x, "y":y}; }
+
+    // scene
+
+    function sceneTile(type, tile) {
+        return {
+            'type': type,
+            'tile': tile,
+            'render': function(i, j, element) {drawImage(grid_to_coords(i, j), element.tile);},
+        }
+    }
+
+    function sceneStreet() {
+        return {
+            'type': TYPE_STREET,
+            'render': renderStreet,
+        }
+    }
+
+    function renderStreet(i, j, element) {
+
+        north = getTile(i, j+1).type == TYPE_STREET ? 1 : 0;
+        south = getTile(i, j-1).type == TYPE_STREET ? 2 : 0;
+        east = getTile(i+1, j).type == TYPE_STREET ? 4 : 0;
+        west = getTile(i-1, j).type == TYPE_STREET ? 8 : 0;
+
+        mapping = {
+            0: STREET_CROSSROADS,
+            1: STREET_VERTICAL,
+            2: STREET_VERTICAL,
+            4: STREET_HORIZONTAL,
+            8: STREET_HORIZONTAL,
+
+            3: STREET_VERTICAL,
+            12: STREET_HORIZONTAL,
+
+            6: STREET_CORNER_SE,
+            10: STREET_CORNER_SW,
+            9: STREET_CORNER_NW,
+            5: STREET_CORNER_NE,
+
+            7: STREET_CROSSROADS_EAST,
+            14: STREET_CROSSROADS_SOUTH,
+            13: STREET_CROSSROADS_NORTH,
+            11: STREET_CROSSROADS_WEST,
+
+            15: STREET_CROSSROADS
+        }
+
+        drawImage(grid_to_coords(i, j), mapping[north+south+east+west]);
+
+    }
+
+    function sceneCloud() {
+        console.log("cloud");
+        return {
+            'type': TYPE_CLOUD,
+            'render': renderCloud,
+            'x': random(grid_cols*tile_width_base),
+            'dx': random(2)+1,
+        }
+    }
+
+    function renderCloud(lane, element) {
+        //console.log("render cloud");
+
+        pos = grid_to_coords(0, lane);
+        pos.y -= tile_height * 3;
+        pos.x += element.x;
+        drawImage(pos, SKYLANE_CLOUD);
+
+        element.x += element.dx;
+        if(element.x > grid_cols*tile_width_base) {
+            element.x = 0;
+            element.dx = random(2)+1;
+        } else if(element.x < 0) {
+            element.x = grid_cols*tile_width_base;
+        }
+
+        //drawImage(grid_to_coords(i, j), STREET_CORNER_NE);
+
+    }
+
+    function sceneBuilding(height) {
+        return {
+            'type': TYPE_BUILDING,
+            'render': renderBuilding,
+            'height': height,
+            'building': random(3)?BUILDING_RED_BOTTOM:BUILDING_GREEN_BOTTOM
+        }
+    }
+
+    function renderBuilding(i, j, element) {
+
+        element.height = Math.ceil(element.height);
+        if(element.height <= 0)
+            return;
+
+        if( element.building == BUILDING_RED_BOTTOM ) {
+
+//            console.log("h "+element.height);
+
+            drawImage(grid_to_coords(i, j), GROUND_GRASS);
+
+            if(element.height == 1) {
+                drawImage(grid_to_coords(i, j), BUILDING_RED_TOP);
+                return;
+            }
+
+            drawImage(grid_to_coords(i, j), BUILDING_RED_BOTTOM);
+
+            height = element.height;
+
+            for(h=1; h<height; h++) {
+                drawImage(grid_to_coords(i-h, j+h), BUILDING_RED_MIDDLE);
+            }
+
+            drawImage(grid_to_coords(i-height, j+height), BUILDING_RED_TOP);
+
+        } else {
+
+            drawImage(grid_to_coords(i, j), GROUND_GRASS);
+            drawImage(grid_to_coords(i, j), BUILDING_GREEN_BOTTOM);
+            drawImage(grid_to_coords(i-1, j+1), BUILDING_GREEN_TOP);
+
+
+        }
+    }
+
+
+    // mouse events
+
+    function onMouseDown(x, y) {
+//        drawCircle( sPoint(x, y) );
+
+        coords = coords_to_grid(x, y);
+        if(coords.x >= 0 && coords.x < grid_cols && coords.y >= 0 && coords.y < grid_rows) {
+
+            grid[coords.x][coords.y] = sceneBuilding(random(2)+1);
+//            redraw();
+        }
+
+//        drawText({'x': x+20, 'y': y+0}, x+" - "+ y);
+//
+//        pp = coords_to_grid(x, y);
+//        drawText({'x': x+20, 'y': y-20}, pp.x+" - "+ pp.y);
+    }
+
+    function onMouseMove(x, y) {
+//        p = sPoint(event.offsetX, event.offsetY);
+//        drawCircle(p);
+//        console.log(event);
+
+        coords = coords_to_grid(x, y);
+        if(coords.x >= 0 && coords.x < grid_cols && coords.y >= 0 && coords.y < grid_rows) {
+
+//            grid[coords.x][coords.y] = sceneBuilding(random(2)+1);
+//            grid[coords.x][coords.y] = sceneStreet();
+//            redraw();
+        }
+    }
+
+    function onMouseUp(x, y) {
+//        p = sPoint(event.offsetX, event.offsetY);
+//        drawCircle(p);
+//        console.log(event);
+    }
+
+    // utils
+
+    function grid_to_coords(i, j) {
+        return sPoint(origin_x + i*tile_width_base+tile_offset*j, origin_y-(j+1)*tile_height);
+    }
+
+    function coords_to_grid(x, y) {
+        var delta_y = canvas.height - y;
+        var delta_x = x;
+
+        var j = Math.floor( delta_y / tile_height );
+        var i = Math.floor( (delta_x - delta_y) / tile_width_base);
+
+        return sPoint( i , j);
+    }
+
+    function random(n) {
+        // [0, n]
+        return Math.floor((Math.random()*(n+1)));
+    }
+
+    var dummy = {'type': TYPE_DUMMY};
+
+    function getTile(i, j) {
+        if(i >= 0 && i < grid_cols && j >= 0 && j < grid_rows) {
+            return grid[i][j];
+        } else {
+            return dummy;
+        }
+    }
+
+
+</script>
+
+</html>
